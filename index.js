@@ -1,8 +1,8 @@
-import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
+import { Client, GatewayIntentBits } from 'discord.js';
 import express from 'express';
 
 /* =========================
-   EXPRESS WEB SERVER
+   EXPRESS SETUP
 ========================= */
 
 const app = express();
@@ -16,14 +16,17 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
+let ready = false;
+
 client.once('ready', () => {
+  ready = true;
   console.log(`Logged in as ${client.user.tag}`);
 });
 
 client.login(process.env.BOT_TOKEN);
 
 /* =========================
-   WEB ROUTES
+   ROUTES
 ========================= */
 
 app.get('/', (req, res) => {
@@ -32,29 +35,26 @@ app.get('/', (req, res) => {
 
 app.get('/invite', async (req, res) => {
   try {
-    // Fetch guild dynamically (reliable on Render)
-    const guilds = await client.guilds.fetch();
-    const guild = guilds.first();
+    if (!ready) {
+      return res.send('Discord bot is still starting. Please refresh in 10 seconds.');
+    }
+
+    const guild = client.guilds.cache.first();
     if (!guild) {
       return res.send('Bot is not connected to any server.');
     }
 
-    const fullGuild = await guild.fetch();
-
-    // Find a text channel that allows invites
-    const channel = fullGuild.channels.cache.find(
-      c =>
-        c.type === ChannelType.GuildText &&
-        c.permissionsFor(fullGuild.members.me).has('CreateInstantInvite')
-    );
+    const channel =
+      guild.systemChannel ||
+      guild.channels.cache.find(c => c.isTextBased());
 
     if (!channel) {
-      return res.send('No channel found with invite permission.');
+      return res.send('No usable text channel found.');
     }
 
     const invite = await channel.createInvite({
       maxUses: 1,
-      maxAge: 86400, // 24 hours
+      maxAge: 86400,
       unique: true
     });
 
@@ -64,9 +64,9 @@ app.get('/invite', async (req, res) => {
       <p>Valid for 24 hours · 1 use only</p>
     `);
 
-  } catch (error) {
-    console.error(error);
-    res.send('Failed to create invite. Check bot permissions.');
+  } catch (err) {
+    console.error(err);
+    res.send('Error creating invite. Check bot permissions.');
   }
 });
 
