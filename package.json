@@ -1,14 +1,1 @@
-{
-  "name": "discord-invite-bot",
-  "version": "1.0.0",
-  "description": "Discord bot with web endpoint to generate 1-use 24-hour invites",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "discord.js": "^14.14.1",
-    "express": "^4.19.2"
-  }
-}
+
