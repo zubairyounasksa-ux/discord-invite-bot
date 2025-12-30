@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
 import express from 'express';
 
 /* =========================
@@ -13,33 +13,11 @@ const PORT = process.env.PORT || 3000;
 ========================= */
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-let inviteChannel = null;
-
-client.once('ready', async () => {
+client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
-
-  // Select first guild
-  const guild = client.guilds.cache.first();
-  if (!guild) {
-    console.error('Bot is not in any server');
-    return;
-  }
-
-  // Prefer system channel, fallback to any text channel
-  inviteChannel =
-    guild.systemChannel ||
-    guild.channels.cache.find(c => c.isTextBased());
-
-  if (!inviteChannel) {
-    console.error('No usable text channel found');
-  } else {
-    console.log(`Using channel: ${inviteChannel.name}`);
-  }
 });
 
 client.login(process.env.BOT_TOKEN);
@@ -54,11 +32,27 @@ app.get('/', (req, res) => {
 
 app.get('/invite', async (req, res) => {
   try {
-    if (!inviteChannel) {
-      return res.send('Bot is not ready yet. Please try again.');
+    // Fetch guild dynamically (reliable on Render)
+    const guilds = await client.guilds.fetch();
+    const guild = guilds.first();
+    if (!guild) {
+      return res.send('Bot is not connected to any server.');
     }
 
-    const invite = await inviteChannel.createInvite({
+    const fullGuild = await guild.fetch();
+
+    // Find a text channel that allows invites
+    const channel = fullGuild.channels.cache.find(
+      c =>
+        c.type === ChannelType.GuildText &&
+        c.permissionsFor(fullGuild.members.me).has('CreateInstantInvite')
+    );
+
+    if (!channel) {
+      return res.send('No channel found with invite permission.');
+    }
+
+    const invite = await channel.createInvite({
       maxUses: 1,
       maxAge: 86400, // 24 hours
       unique: true
@@ -66,11 +60,7 @@ app.get('/invite', async (req, res) => {
 
     res.send(`
       <h2>Discord Invite Generated</h2>
-      <p>
-        <a href="${invite.url}" target="_blank">
-          ${invite.url}
-        </a>
-      </p>
+      <p><a href="${invite.url}" target="_blank">${invite.url}</a></p>
       <p>Valid for 24 hours · 1 use only</p>
     `);
 
