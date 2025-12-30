@@ -1,108 +1,60 @@
-import { Client, GatewayIntentBits } from 'discord.js';
-import express from 'express';
-
-/* =========================
-   EXPRESS APP
-========================= */
+import express from "express";
+import fetch from "node-fetch";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* =========================
-   DISCORD CLIENT
-========================= */
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const CHANNEL_ID = process.env.CHANNEL_ID;
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
-
-let readyAt = null;
-
-/* ---- Discord Events ---- */
-
-client.once('ready', () => {
-  readyAt = new Date();
-  console.log(`✅ Logged in as ${client.user.tag}`);
-});
-
-client.on('error', (err) => {
-  console.error('❌ Discord client error:', err);
-});
-
-client.on('shardError', (err) => {
-  console.error('❌ Discord shard error:', err);
-});
-
-/* ---- Login ---- */
-
-if (!process.env.BOT_TOKEN) {
-  console.error('❌ BOT_TOKEN is missing. Set it in Render Environment Variables.');
-} else {
-  console.log(`BOT_TOKEN detected (length=${process.env.BOT_TOKEN.length}). Attempting Discord login...`);
-  client.login(process.env.BOT_TOKEN).catch(err => {
-    console.error('❌ Discord login failed:', err);
-  });
+if (!BOT_TOKEN || !CHANNEL_ID) {
+  console.error("❌ BOT_TOKEN or CHANNEL_ID missing");
+  process.exit(1);
 }
 
-/* =========================
-   ROUTES
-========================= */
-
-app.get('/', (req, res) => {
-  res.send('Discord Invite Bot is running.');
+app.get("/", (req, res) => {
+  res.send("Discord Invite Service is running.");
 });
 
-app.get('/status', (req, res) => {
-  res.json({
-    ready: Boolean(readyAt),
-    readyAt,
-    botUser: client.user ? client.user.tag : null,
-    guildCount: client.guilds.cache.size
-  });
-});
-
-app.get('/invite', async (req, res) => {
-  if (!readyAt) {
-    return res.send('Discord bot not connected yet. Check /status and logs.');
-  }
-
+app.get("/invite", async (req, res) => {
   try {
-    const guild = client.guilds.cache.first();
-    if (!guild) {
-      return res.send('Bot is not in any server.');
+    const response = await fetch(
+      `https://discord.com/api/v10/channels/${CHANNEL_ID}/invites`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bot ${BOT_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          max_uses: 1,
+          max_age: 86400,
+          unique: true
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return res.send("Failed to create invite. Check permissions.");
     }
 
-    const channel =
-      guild.systemChannel ||
-      guild.channels.cache.find(c => c.isTextBased());
-
-    if (!channel) {
-      return res.send('No usable text channel found.');
-    }
-
-    const invite = await channel.createInvite({
-      maxUses: 1,
-      maxAge: 86400, // 24 hours
-      unique: true
-    });
+    const inviteUrl = `https://discord.gg/${data.code}`;
 
     res.send(`
       <h2>Invite Created</h2>
-      <p><a href="${invite.url}" target="_blank">${invite.url}</a></p>
+      <p><a href="${inviteUrl}" target="_blank">${inviteUrl}</a></p>
       <p>1 use · 24 hours</p>
     `);
 
   } catch (err) {
-    console.error('❌ Invite creation error:', err);
-    res.send('Error creating invite. Check bot permissions.');
+    console.error(err);
+    res.send("Internal error creating invite.");
   }
 });
-
-/* =========================
-   START SERVER
-========================= */
 
 app.listen(PORT, () => {
   console.log(`Web server running on port ${PORT}`);
 });
-
