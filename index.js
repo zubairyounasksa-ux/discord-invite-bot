@@ -24,7 +24,8 @@ app.get("/invite", async (req, res) => {
         method: "POST",
         headers: {
           "Authorization": `Bot ${BOT_TOKEN}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "User-Agent": "DiscordBot (InviteService, 1.0)"
         },
         body: JSON.stringify({
           max_uses: 1,
@@ -34,11 +35,25 @@ app.get("/invite", async (req, res) => {
       }
     );
 
-    const data = await response.json();
+    const text = await response.text(); // ⬅️ IMPORTANT
+
+    console.log("Discord API status:", response.status);
+    console.log("Discord API raw response:", text);
+
+    // Try parsing JSON safely
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return res.send(
+        `Discord did not return JSON.<br>Status: ${response.status}<br>Raw response:<pre>${text}</pre>`
+      );
+    }
 
     if (!response.ok) {
-      console.error(data);
-      return res.send("Failed to create invite. Check permissions.");
+      return res.send(
+        `Discord API error ${response.status}:<pre>${JSON.stringify(data, null, 2)}</pre>`
+      );
     }
 
     const inviteUrl = `https://discord.gg/${data.code}`;
@@ -50,8 +65,8 @@ app.get("/invite", async (req, res) => {
     `);
 
   } catch (err) {
-    console.error(err);
-    res.send("Internal error creating invite.");
+    console.error("Invite exception:", err);
+    res.send("Internal server error.");
   }
 });
 
