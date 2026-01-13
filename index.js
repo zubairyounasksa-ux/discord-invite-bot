@@ -1,3 +1,6 @@
+import { client } from "./bot.js";
+client.login(process.env.BOT_TOKEN);
+
 import express from "express";
 import fetch from "node-fetch";
 
